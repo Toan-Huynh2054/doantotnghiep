@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import sharp from "sharp";
 
-const imagesDir = fileURLToPath(new URL("./Images", import.meta.url));
+const imagesDir = fileURLToPath(new URL("./public/Images", import.meta.url));
 const distDir = fileURLToPath(new URL("./dist", import.meta.url));
 
 const IMG_EXT = new Set([".jpg", ".jpeg", ".png"]);
@@ -17,7 +17,6 @@ function walkImages(dir, rootRel = "") {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const abs = path.join(dir, entry.name);
     const rel = path.join(rootRel, entry.name);
-    if (rel.includes("Landingpagevideo")) continue; // video không kèm tiền tố /Images
     if (entry.isDirectory()) out.push(...walkImages(abs, rel));
     else out.push({ abs, rel });
   }
@@ -38,25 +37,21 @@ async function optimize(abs, ext) {
 }
 
 async function writeOut(rel, buf, abs) {
-  for (const root of [path.join(distDir, "Images"), distDir]) {
-    const dest = path.join(root, rel);
-    mkdirSync(path.dirname(dest), { recursive: true });
-    if (buf) writeFileSync(dest, buf);
-    else copyFileSync(abs, dest);
-  }
+  const dest = path.join(distDir, "Images", rel);
+  mkdirSync(path.dirname(dest), { recursive: true });
+  if (buf) writeFileSync(dest, buf);
+  else copyFileSync(abs, dest);
 }
 
 /**
- * Dữ liệu (provinceData, HomePage…) tham chiếu ảnh runtime theo dạng "/Images/...".
- * publicDir: "Images" copy *nội dung* Images ra gốc dist/ → mất tiền tố "/Images" →
- * ảnh 404 ở bản build. Plugin này (chỉ khi build) copy lại Images → dist/Images để
- * "/Images/..." hoạt động đúng, ĐỒNG THỜI nén ảnh bằng sharp (resize ≤2000px,
- * JPEG q80 / PNG nén sâu) ghi đè cả bản ở dist/Images lẫn bản publicDir ở gốc dist.
- * Không đổi bất kỳ file gốc nào trong Images/.
+ * Nén ảnh bằng sharp (resize ≤2000px, JPEG q80 / PNG nén sâu).
+ * Vì file đã nằm trong public/Images, Vite sẽ tự động copy sang dist/Images.
+ * Plugin này chỉ chạy sau khi build xong để GHI ĐÈ các ảnh trong dist/Images 
+ * bằng bản đã nén, giúp tối ưu dung lượng.
  */
-function copyAndOptimizeImages() {
+function optimizeImages() {
   return {
-    name: "vx-copy-optimize-images",
+    name: "vx-optimize-images",
     apply: "build",
     async closeBundle() {
       if (!existsSync(imagesDir)) return;
@@ -73,16 +68,15 @@ function copyAndOptimizeImages() {
             try {
               const before = statSync(abs).size;
               const buf = await optimize(abs, ext);
-              await writeOut(rel, buf, abs);
+              // Chỉ ghi đè nếu nén thành công (buf != null)
               if (buf) {
+                await writeOut(rel, buf, abs);
                 optimized++;
                 saved += before - buf.length;
               }
             } catch {
-              await writeOut(rel, null, abs); // lỗi giải mã → giữ bản gốc
+              // Lỗi giải mã -> bỏ qua (giữ nguyên file Vite đã copy)
             }
-          } else {
-            await writeOut(rel, null, abs); // không phải ảnh → copy thô
           }
         }
       };
@@ -95,8 +89,7 @@ function copyAndOptimizeImages() {
 }
 
 export default defineConfig({
-  plugins: [react(), copyAndOptimizeImages()],
-  publicDir: "Images",
+  plugins: [react(), optimizeImages()],
   server: {
     port: 5173
   }
