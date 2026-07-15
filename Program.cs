@@ -74,7 +74,10 @@ builder.Services.AddCors(options =>
         }
         else
         {
-            policy.WithOrigins("http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176", "https://localhost:5173", "https://localhost:5174", "https://localhost:5175", "https://localhost:5176", "https://vietnam-identity-system.vercel.app")
+            policy.SetIsOriginAllowed(origin => 
+                      origin.StartsWith("http://localhost:") || 
+                      origin.StartsWith("https://localhost:") || 
+                      origin.EndsWith(".vercel.app"))
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials();
