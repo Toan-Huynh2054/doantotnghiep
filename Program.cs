@@ -64,24 +64,20 @@ builder.Services.AddCors(options =>
     options.AddPolicy("Frontend", policy =>
     {
         var frontendUrlsStr = builder.Configuration["AllowedOrigins"];
+        var allowedUrls = new List<string>();
         if (!string.IsNullOrEmpty(frontendUrlsStr))
         {
-            var urls = frontendUrlsStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            policy.WithOrigins(urls)
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials(); // Thêm cái này phòng trường hợp Frontend gửi Cookie/Token
+            allowedUrls.AddRange(frontendUrlsStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         }
-        else
-        {
-            policy.SetIsOriginAllowed(origin => 
-                      origin.StartsWith("http://localhost:") || 
-                      origin.StartsWith("https://localhost:") || 
-                      origin.EndsWith(".vercel.app"))
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
-        }
+
+        policy.SetIsOriginAllowed(origin => 
+                  origin.StartsWith("http://localhost:") || 
+                  origin.StartsWith("https://localhost:") || 
+                  origin.EndsWith(".vercel.app") ||
+                  allowedUrls.Contains(origin))
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
